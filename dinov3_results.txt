@@ -1,0 +1,23 @@
+======================================================================
+DINOv3 ViT-B/16 - RÉSULTATS FINAUX
+======================================================================
+
+Modèle            : DINOv3 ViT-B/16 (Meta AI, août 2025)
+HuggingFace ID    : facebook/dinov3-vitb16-pretrain-lvd1689m
+Nombre de classes : 119
+Total images      : 20580
+Train             : 14406 images
+Val               : 3087 images
+Test              : 3087 images
+
+Paramètres totaux         : 86,115,191
+Epochs entraînés          : 35
+  - Phase 1 (head only)   : 20 epochs
+  - Phase 2 (fine-tuning) : 15 epochs
+
+Dataset      Loss         Accuracy     Top-5 Acc   
+----------------------------------------------------------------------
+Train        0.1635       0.9489       0.9988      
+Val          0.3799       0.8873       0.9903      
+Test         0.4085       0.8801       0.9874      
+======================================================================

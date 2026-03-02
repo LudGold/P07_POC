@@ -1,0 +1,55 @@
+# Dataset images (partout dans le projet)
+Images/
+**/Images/
+images.tar
+*.tar
+*.tar.gz
+*.zip
+
+# Données / exports
+data/
+**/data/
+datasets/
+**/datasets/
+logs/
+**/logs/
+outputs/
+**/outputs/
+runs/
+**/runs/
+*.csv
+*.parquet
+*.feather
+
+# Modèles entraînés (trop volumineux pour Git)
+*.h5
+*.keras
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.onnx
+
+# Cache
+__pycache__/
+**/__pycache__/
+*.pyc
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+swin_model_cache/
+**/swin_model_cache/
+
+# Fichiers temporaires Office
+~$*
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Environnement Python
+.venv/
+venv/
+**/.venv/
+**/venv/
+*.egg-info/

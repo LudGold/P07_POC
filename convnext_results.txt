@@ -1,0 +1,22 @@
+======================================================================
+ConvNeXt-Tiny - RÉSULTATS FINAUX
+======================================================================
+
+Modèle          : ConvNeXt-Tiny (Meta AI 2022)
+Nombre de classes : 119
+Total images : 20580
+Train : 14406 images
+Val   : 3087 images
+Test  : 3087 images
+
+Paramètres du modèle : 28,274,903
+Epochs entraînés : 35
+  - Phase 1 (head only) : 20 epochs
+  - Phase 2 (fine-tuning) : 15 epochs
+
+Dataset      Loss         Accuracy     Top-5 Acc   
+----------------------------------------------------------------------
+Train        0.1460       0.9513       0.9996      
+Val          0.3327       0.8986       0.9938      
+Test         0.3588       0.8853       0.9922      
+======================================================================
