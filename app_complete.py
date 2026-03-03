@@ -24,6 +24,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import transforms
 from types import SimpleNamespace
+from huggingface_hub import hf_hub_download
 
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Le Refuge - Identification Chiens", layout="wide")
@@ -135,6 +136,30 @@ class DINOv3Classifier(nn.Module):
     def forward(self, pixel_values):
         outputs = self.backbone(pixel_values=pixel_values)
         return self.classifier(outputs.pooler_output)
+
+# --- TELECHARGEMENT DES ARTEFACTS DEPUIS HUGGING FACE ---
+HF_REPO_ID = "LudGold/P07_POC"
+
+MODEL_FILES = [
+    "best_convnext_120races.h5",
+    "best_mobilenet_120races.h5",
+    "best_dinov3_120races.pt",
+    "label_encoder_convnext.pkl",
+    "label_encoder_mobilenet.pkl",
+    "label_encoder_dinov3.pkl",
+]
+
+@st.cache_resource
+def download_artifacts():
+    """Telecharge les modeles depuis HuggingFace s'ils n'existent pas localement."""
+    for fname in MODEL_FILES:
+        if not os.path.exists(fname):
+            try:
+                path = hf_hub_download(repo_id=HF_REPO_ID, filename=fname)
+                os.symlink(path, fname)
+            except Exception as e:
+                st.warning(f"Impossible de telecharger {fname} : {e}")
+
 
 # --- CHARGEMENT DES RESSOURCES ---
 @st.cache_resource
@@ -284,7 +309,8 @@ def predict_top5(image, model_name, assets):
 st.title("Le Refuge - Assistant d'Identification de Races de Chiens")
 st.caption("Classification par Deep Learning sur le dataset Stanford Dogs")
 
-with st.spinner("Chargement des modèles..."):
+with st.spinner("Chargement des modeles..."):
+    download_artifacts()
     assets = load_all_models()
 
 available_models = list(assets['models'].keys())
@@ -323,91 +349,96 @@ tab_eda, tab_predict, tab_perf = st.tabs([
 with tab_eda:
     st.header("Analyse exploratoire du dataset Stanford Dogs")
     eda_df = load_eda_data()
-    breed_counts = eda_df['breed'].value_counts().sort_values(ascending=False)
 
-    # --- Metriques globales ---
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Nombre total d'images", f"{len(eda_df):,}")
-    c2.metric("Nombre de races", f"{breed_counts.shape[0]}")
-    c3.metric("Images par race (moyenne)", f"{len(eda_df) // breed_counts.shape[0]}")
+    if eda_df.empty:
+        st.warning("Le dossier Images/ n'est pas disponible. "
+                    "L'exploration est accessible uniquement en local avec le dataset Stanford Dogs.")
+    else:
+        breed_counts = eda_df['breed'].value_counts().sort_values(ascending=False)
 
-    st.markdown("---")
+        # --- Metriques globales ---
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Nombre total d'images", f"{len(eda_df):,}")
+        c2.metric("Nombre de races", f"{breed_counts.shape[0]}")
+        c3.metric("Images par race (moyenne)", f"{len(eda_df) // breed_counts.shape[0]}")
 
-    # --- Graphique interactif 1 : distribution des images par race ---
-    st.subheader("Distribution du nombre d'images par race")
-    fig_dist = px.bar(
-        x=breed_counts.index,
-        y=breed_counts.values,
-        labels={"x": "Race", "y": "Nombre d'images"},
-        color_discrete_sequence=[WCAG_COLORS[0]],
-    )
-    fig_dist.update_layout(
-        xaxis_tickangle=-45,
-        xaxis_title="Race",
-        yaxis_title="Nombre d'images",
-        height=500,
-        margin=dict(b=160),
-        font=dict(size=13),
-    )
-    fig_dist.add_hline(
-        y=breed_counts.mean(), line_dash="dash", line_color=WCAG_COLORS[1],
-        annotation_text=f"Moyenne : {breed_counts.mean():.0f}",
-        annotation_font_color=WCAG_COLORS[1],
-    )
-    st.plotly_chart(fig_dist, use_container_width=True)
+        st.markdown("---")
 
-    # --- Graphique interactif 2 : boite a moustaches des dimensions ---
-    st.subheader("Dimensions des images (échantillon)")
-    sample_paths = eda_df.sample(min(500, len(eda_df)), random_state=42)['path']
-    dims = []
-    for p in sample_paths:
-        try:
-            w, h = Image.open(p).size
-            dims.append({"Largeur": w, "Hauteur": h, "Ratio": round(w / h, 2)})
-        except Exception:
-            pass
-    dims_df = pd.DataFrame(dims)
+        # --- Graphique interactif 1 : distribution des images par race ---
+        st.subheader("Distribution du nombre d'images par race")
+        fig_dist = px.bar(
+            x=breed_counts.index,
+            y=breed_counts.values,
+            labels={"x": "Race", "y": "Nombre d'images"},
+            color_discrete_sequence=[WCAG_COLORS[0]],
+        )
+        fig_dist.update_layout(
+            xaxis_tickangle=-45,
+            xaxis_title="Race",
+            yaxis_title="Nombre d'images",
+            height=500,
+            margin=dict(b=160),
+            font=dict(size=13),
+        )
+        fig_dist.add_hline(
+            y=breed_counts.mean(), line_dash="dash", line_color=WCAG_COLORS[1],
+            annotation_text=f"Moyenne : {breed_counts.mean():.0f}",
+            annotation_font_color=WCAG_COLORS[1],
+        )
+        st.plotly_chart(fig_dist, use_container_width=True)
 
-    fig_dims = go.Figure()
-    fig_dims.add_trace(go.Box(y=dims_df['Largeur'], name="Largeur (px)",
-                              marker_color=WCAG_COLORS[0]))
-    fig_dims.add_trace(go.Box(y=dims_df['Hauteur'], name="Hauteur (px)",
-                              marker_color=WCAG_COLORS[2]))
-    fig_dims.update_layout(
-        yaxis_title="Pixels",
-        height=400,
-        font=dict(size=13),
-        legend=dict(orientation="h", y=-0.15),
-    )
-    st.plotly_chart(fig_dims, use_container_width=True)
+        # --- Graphique interactif 2 : boite a moustaches des dimensions ---
+        st.subheader("Dimensions des images (echantillon)")
+        sample_paths = eda_df.sample(min(500, len(eda_df)), random_state=42)['path']
+        dims = []
+        for p in sample_paths:
+            try:
+                w, h = Image.open(p).size
+                dims.append({"Largeur": w, "Hauteur": h, "Ratio": round(w / h, 2)})
+            except Exception:
+                pass
+        dims_df = pd.DataFrame(dims)
 
-    st.markdown("---")
+        fig_dims = go.Figure()
+        fig_dims.add_trace(go.Box(y=dims_df['Largeur'], name="Largeur (px)",
+                                  marker_color=WCAG_COLORS[0]))
+        fig_dims.add_trace(go.Box(y=dims_df['Hauteur'], name="Hauteur (px)",
+                                  marker_color=WCAG_COLORS[2]))
+        fig_dims.update_layout(
+            yaxis_title="Pixels",
+            height=400,
+            font=dict(size=13),
+            legend=dict(orientation="h", y=-0.15),
+        )
+        st.plotly_chart(fig_dims, use_container_width=True)
 
-    # --- Exemples d'images par race ---
-    st.subheader("Exemples d'images par race")
-    breeds_sorted = sorted(eda_df['breed'].unique())
-    selected_breed = st.selectbox(
-        "Choisir une race pour afficher des exemples",
-        breeds_sorted,
-        help="Sélectionnez une race dans la liste pour voir des images du dataset.",
-    )
-    breed_imgs = eda_df[eda_df['breed'] == selected_breed]['path'].tolist()
-    st.caption(f"{len(breed_imgs)} images disponibles pour cette race.")
-    cols = st.columns(5)
-    for i, p in enumerate(breed_imgs[:5]):
-        with cols[i]:
-            st.image(Image.open(p), caption=f"#{i+1}", use_container_width=True)
+        st.markdown("---")
 
-    st.markdown("---")
+        # --- Exemples d'images par race ---
+        st.subheader("Exemples d'images par race")
+        breeds_sorted = sorted(eda_df['breed'].unique())
+        selected_breed = st.selectbox(
+            "Choisir une race pour afficher des exemples",
+            breeds_sorted,
+            help="Selectionnez une race dans la liste pour voir des images du dataset.",
+        )
+        breed_imgs = eda_df[eda_df['breed'] == selected_breed]['path'].tolist()
+        st.caption(f"{len(breed_imgs)} images disponibles pour cette race.")
+        cols = st.columns(5)
+        for i, p in enumerate(breed_imgs[:5]):
+            with cols[i]:
+                st.image(Image.open(p), caption=f"#{i+1}", use_container_width=True)
 
-    # --- Transformations d'images ---
-    st.subheader("Exemples de transformations appliquées")
-    st.markdown(
-        "Aperçu des pré-traitements possibles sur une image du dataset "
-        "(égalisation d'histogramme, flou gaussien, détection de contours)."
-    )
-    sample_img = Image.open(breed_imgs[0]).convert('RGB')
-    show_image_transforms(sample_img)
+        st.markdown("---")
+
+        # --- Transformations d'images ---
+        st.subheader("Exemples de transformations appliquees")
+        st.markdown(
+            "Apercu des pre-traitements possibles sur une image du dataset "
+            "(egalisation d'histogramme, flou gaussien, detection de contours)."
+        )
+        sample_img = Image.open(breed_imgs[0]).convert('RGB')
+        show_image_transforms(sample_img)
 
 
 # ======================================================================
