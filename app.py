@@ -259,12 +259,12 @@ def load_eda_data():
     return pd.DataFrame()
 
 
-def download_breed_images(folder, filenames, max_imgs=5):
+def download_breed_images(folder, filenames, max_imgs=3):
     """Telecharge quelques images d'une race depuis HuggingFace."""
     images = []
     for fname in filenames[:max_imgs]:
         try:
-            path = hf_hub_download(repo_id=HF_REPO_ID, filename=f"Images/{folder}/{fname}")
+            path = hf_hub_download(repo_id=HF_REPO_ID, filename=f"Images_sample/{folder}/{fname}")
             images.append(Image.open(path).convert('RGB'))
         except Exception:
             pass
@@ -275,11 +275,11 @@ def get_breed_images(breed_subset):
     """Renvoie jusqu'a 5 images PIL pour une race donnee (local ou cloud)."""
     if IMAGES_LOCAL:
         paths = [os.path.join("Images", row['folder'], row['filename'])
-                 for _, row in breed_subset.head(5).iterrows()]
+                 for _, row in breed_subset.head(3).iterrows()]
         return [Image.open(p).convert('RGB') for p in paths]
     folder = breed_subset['folder'].iloc[0]
     fnames = breed_subset['filename'].tolist()
-    return download_breed_images(folder, fnames, max_imgs=5)
+    return download_breed_images(folder, fnames, max_imgs=3)
 
 
 def show_transforms(img):
