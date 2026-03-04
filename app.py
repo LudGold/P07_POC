@@ -237,6 +237,8 @@ MODEL_DISPLAY = {
 def load_eda_data():
     """Scanne le dossier Images/ et construit un DataFrame descriptif."""
     path_base = "Images"
+    if not os.path.isdir(path_base):
+        return pd.DataFrame()
     records = []
     for folder in sorted(os.listdir(path_base)):
         full = os.path.join(path_base, folder)
