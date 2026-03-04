@@ -151,7 +151,7 @@ MODEL_FILES = [
 
 @st.cache_resource
 def download_artifacts():
-    """Telecharge les modeles depuis HuggingFace s'ils n'existent pas localement."""
+    """Telecharge les modèles depuis HuggingFace s'ils n'existent pas localement."""
     for fname in MODEL_FILES:
         if not os.path.exists(fname):
             try:
@@ -248,7 +248,8 @@ def load_eda_data():
             breed = folder.split('-', 1)[-1].replace('_', ' ')
             imgs = glob(os.path.join(full, "*.jpg"))
             for p in imgs:
-                records.append({"breed": breed, "path": p, "folder": folder,
+                records.append({"breed": breed, "path": p,
+                                "folder": folder, "filename": os.path.basename(p),
                                 "width": None, "height": None})
         df = pd.DataFrame(records)
         df['_local'] = True
@@ -257,12 +258,25 @@ def load_eda_data():
     csv_path = "eda_metadata.csv"
     if os.path.isfile(csv_path):
         df = pd.read_csv(csv_path)
-        df['path'] = ""
-        df['folder'] = ""
         df['_local'] = False
         return df
 
     return pd.DataFrame()
+
+
+def download_breed_images(folder, filenames, max_imgs=5):
+    """Telecharge quelques images d'une race depuis HuggingFace."""
+    images = []
+    for fname in filenames[:max_imgs]:
+        try:
+            path = hf_hub_download(
+                repo_id=HF_REPO_ID,
+                filename=f"Images/{folder}/{fname}",
+            )
+            images.append(Image.open(path).convert('RGB'))
+        except Exception:
+            pass
+    return images
 
 
 def show_image_transforms(img):
@@ -325,7 +339,7 @@ def predict_top5(image, model_name, assets):
 st.title("Le Refuge - Assistant d'Identification de Races de Chiens")
 st.caption("Classification par Deep Learning sur le dataset Stanford Dogs")
 
-with st.spinner("Chargement des modeles..."):
+with st.spinner("Chargement des modèles..."):
     download_artifacts()
     assets = load_all_models()
 
@@ -450,34 +464,31 @@ with tab_eda:
         st.caption(f"{len(breed_subset)} images disponibles pour cette race.")
 
         if is_local:
-            breed_imgs = breed_subset['path'].tolist()
-            cols = st.columns(5)
-            for i, p in enumerate(breed_imgs[:5]):
+            breed_imgs = [Image.open(p).convert('RGB')
+                          for p in breed_subset['path'].tolist()[:5]]
+        else:
+            folder_name = breed_subset['folder'].iloc[0]
+            fnames = breed_subset['filename'].tolist()
+            with st.spinner("Telechargement des images d'exemple..."):
+                breed_imgs = download_breed_images(folder_name, fnames, max_imgs=5)
+
+        if breed_imgs:
+            cols = st.columns(len(breed_imgs))
+            for i, img in enumerate(breed_imgs):
                 with cols[i]:
-                    st.image(Image.open(p), caption=f"#{i+1}", use_container_width=True)
+                    st.image(img, caption=f"#{i+1}", use_container_width=True)
 
             st.markdown("---")
 
-            # --- Transformations d'images ---
             st.subheader("Exemples de transformations appliquees")
             st.markdown(
                 "Apercu des pre-traitements possibles sur une image du dataset "
                 "(egalisation d'histogramme, flou gaussien, detection de contours)."
             )
-            sample_img = Image.open(breed_imgs[0]).convert('RGB')
-            show_image_transforms(sample_img)
-        else:
-            st.info(
-                "Les images d'exemple ne sont pas disponibles en mode cloud. "
-                "Vous pouvez utiliser l'onglet **Identification** pour tester "
-                "un modele avec votre propre photo, ou telecharger le dataset complet : "
-                "[Stanford Dogs](http://vision.stanford.edu/aditya86/ImageNetDogs/)"
-            )
+            show_image_transforms(breed_imgs[0])
 
-
-# ======================================================================
 # ONGLET 2 : PREDICTION
-# ======================================================================
+
 with tab_predict:
     st.header("Identifier un pensionnaire canin")
     st.markdown("Soumettez la photo d'un chien et sélectionnez un modèle pour identifier sa race.")
@@ -532,19 +543,18 @@ with tab_predict:
                     st.progress(prob, text=f"{label} — {prob:.1%}")
 
 
-# ======================================================================
+
 # ONGLET 3 : PERFORMANCE DES MODELES
-# ======================================================================
 with tab_perf:
     st.header("Comparaison des performances")
     st.markdown("Resultats évalués sur le jeu de test (3 087 images, 119 races).")
 
     perf = pd.DataFrame([
-        {"Modele": "ConvNeXt-Tiny", "Test Accuracy": 0.8853, "Test Top-5": 0.9922,
+        {"Modèle": "ConvNeXt-Tiny", "Test Accuracy": 0.8853, "Test Top-5": 0.9922,
          "Parametres (M)": 28.3, "Inference (ms)": "~45"},
-        {"Modele": "MobileNetV2", "Test Accuracy": 0.76, "Test Top-5": 0.96,
+        {"Modèle": "MobileNetV2", "Test Accuracy": 0.76, "Test Top-5": 0.96,
          "Parametres (M)": 3.5, "Inference (ms)": "~25"},
-        {"Modele": "DINOv3 ViT-B/16", "Test Accuracy": 0.8801, "Test Top-5": 0.9874,
+        {"Modèle": "DINOv3 ViT-B/16", "Test Accuracy": 0.8801, "Test Top-5": 0.9874,
          "Parametres (M)": 86.1, "Inference (ms)": "~120"},
     ])
 
@@ -553,12 +563,12 @@ with tab_perf:
     # Graphique comparatif
     fig_perf = go.Figure()
     fig_perf.add_trace(go.Bar(
-        x=perf['Modele'], y=perf['Test Accuracy'], name='Top-1 Accuracy',
+        x=perf['Modèle'], y=perf['Test Accuracy'], name='Top-1 Accuracy',
         marker_color=WCAG_COLORS[0],
         text=[f"{v:.1%}" for v in perf['Test Accuracy']], textposition='outside',
     ))
     fig_perf.add_trace(go.Bar(
-        x=perf['Modele'], y=perf['Test Top-5'], name='Top-5 Accuracy',
+        x=perf['Modèle'], y=perf['Test Top-5'], name='Top-5 Accuracy',
         marker_color=WCAG_COLORS[2],
         text=[f"{v:.1%}" for v in perf['Test Top-5']], textposition='outside',
     ))
@@ -583,7 +593,7 @@ st.markdown("---")
 st.markdown(
     "<div style='text-align:center; color:#555; font-size:0.9em'>"
     "Le Refuge — Assistant d'identification de races de chiens<br>"
-    "Projet P07 — Accessibilité WCAG 2.1"
+    "Projet P07 - LudGold — Accessibilité WCAG 2.1"
     "</div>",
     unsafe_allow_html=True,
 )
