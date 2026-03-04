@@ -235,20 +235,34 @@ MODEL_DISPLAY = {
 # --- FONCTIONS EDA ---
 @st.cache_data
 def load_eda_data():
-    """Scanne le dossier Images/ et construit un DataFrame descriptif."""
+    """Charge les données EDA depuis Images/ (local) ou eda_metadata.csv (cloud)."""
     path_base = "Images"
-    if not os.path.isdir(path_base):
-        return pd.DataFrame()
-    records = []
-    for folder in sorted(os.listdir(path_base)):
-        full = os.path.join(path_base, folder)
-        if not os.path.isdir(full):
-            continue
-        breed = folder.split('-', 1)[-1].replace('_', ' ')
-        imgs = glob(os.path.join(full, "*.jpg"))
-        for p in imgs:
-            records.append({"breed": breed, "path": p, "folder": folder})
-    return pd.DataFrame(records)
+    local = os.path.isdir(path_base)
+
+    if local:
+        records = []
+        for folder in sorted(os.listdir(path_base)):
+            full = os.path.join(path_base, folder)
+            if not os.path.isdir(full):
+                continue
+            breed = folder.split('-', 1)[-1].replace('_', ' ')
+            imgs = glob(os.path.join(full, "*.jpg"))
+            for p in imgs:
+                records.append({"breed": breed, "path": p, "folder": folder,
+                                "width": None, "height": None})
+        df = pd.DataFrame(records)
+        df['_local'] = True
+        return df
+
+    csv_path = "eda_metadata.csv"
+    if os.path.isfile(csv_path):
+        df = pd.read_csv(csv_path)
+        df['path'] = ""
+        df['folder'] = ""
+        df['_local'] = False
+        return df
+
+    return pd.DataFrame()
 
 
 def show_image_transforms(img):
@@ -350,12 +364,16 @@ tab_eda, tab_predict, tab_perf = st.tabs([
 # ======================================================================
 with tab_eda:
     st.header("Analyse exploratoire du dataset Stanford Dogs")
+    st.markdown(
+        "Dataset : [Stanford Dogs](http://vision.stanford.edu/aditya86/ImageNetDogs/) "
+        "— 20 580 images, 120 races de chiens."
+    )
     eda_df = load_eda_data()
 
     if eda_df.empty:
-        st.warning("Le dossier Images/ n'est pas disponible. "
-                    "L'exploration est accessible uniquement en local avec le dataset Stanford Dogs.")
+        st.warning("Aucune donnee EDA disponible (ni Images/ ni eda_metadata.csv).")
     else:
+        is_local = eda_df['_local'].iloc[0] if '_local' in eda_df.columns else False
         breed_counts = eda_df['breed'].value_counts().sort_values(ascending=False)
 
         # --- Metriques globales ---
@@ -390,16 +408,20 @@ with tab_eda:
         st.plotly_chart(fig_dist, use_container_width=True)
 
         # --- Graphique interactif 2 : boite a moustaches des dimensions ---
-        st.subheader("Dimensions des images (echantillon)")
-        sample_paths = eda_df.sample(min(500, len(eda_df)), random_state=42)['path']
-        dims = []
-        for p in sample_paths:
-            try:
-                w, h = Image.open(p).size
-                dims.append({"Largeur": w, "Hauteur": h, "Ratio": round(w / h, 2)})
-            except Exception:
-                pass
-        dims_df = pd.DataFrame(dims)
+        st.subheader("Dimensions des images")
+        if is_local:
+            sample_paths = eda_df.sample(min(500, len(eda_df)), random_state=42)['path']
+            dims = []
+            for p in sample_paths:
+                try:
+                    w, h = Image.open(p).size
+                    dims.append({"Largeur": w, "Hauteur": h})
+                except Exception:
+                    pass
+            dims_df = pd.DataFrame(dims)
+        else:
+            sample = eda_df.sample(min(500, len(eda_df)), random_state=42)
+            dims_df = pd.DataFrame({"Largeur": sample['width'], "Hauteur": sample['height']})
 
         fig_dims = go.Figure()
         fig_dims.add_trace(go.Box(y=dims_df['Largeur'], name="Largeur (px)",
@@ -424,23 +446,33 @@ with tab_eda:
             breeds_sorted,
             help="Selectionnez une race dans la liste pour voir des images du dataset.",
         )
-        breed_imgs = eda_df[eda_df['breed'] == selected_breed]['path'].tolist()
-        st.caption(f"{len(breed_imgs)} images disponibles pour cette race.")
-        cols = st.columns(5)
-        for i, p in enumerate(breed_imgs[:5]):
-            with cols[i]:
-                st.image(Image.open(p), caption=f"#{i+1}", use_container_width=True)
+        breed_subset = eda_df[eda_df['breed'] == selected_breed]
+        st.caption(f"{len(breed_subset)} images disponibles pour cette race.")
 
-        st.markdown("---")
+        if is_local:
+            breed_imgs = breed_subset['path'].tolist()
+            cols = st.columns(5)
+            for i, p in enumerate(breed_imgs[:5]):
+                with cols[i]:
+                    st.image(Image.open(p), caption=f"#{i+1}", use_container_width=True)
 
-        # --- Transformations d'images ---
-        st.subheader("Exemples de transformations appliquees")
-        st.markdown(
-            "Apercu des pre-traitements possibles sur une image du dataset "
-            "(egalisation d'histogramme, flou gaussien, detection de contours)."
-        )
-        sample_img = Image.open(breed_imgs[0]).convert('RGB')
-        show_image_transforms(sample_img)
+            st.markdown("---")
+
+            # --- Transformations d'images ---
+            st.subheader("Exemples de transformations appliquees")
+            st.markdown(
+                "Apercu des pre-traitements possibles sur une image du dataset "
+                "(egalisation d'histogramme, flou gaussien, detection de contours)."
+            )
+            sample_img = Image.open(breed_imgs[0]).convert('RGB')
+            show_image_transforms(sample_img)
+        else:
+            st.info(
+                "Les images d'exemple ne sont pas disponibles en mode cloud. "
+                "Vous pouvez utiliser l'onglet **Identification** pour tester "
+                "un modele avec votre propre photo, ou telecharger le dataset complet : "
+                "[Stanford Dogs](http://vision.stanford.edu/aditya86/ImageNetDogs/)"
+            )
 
 
 # ======================================================================

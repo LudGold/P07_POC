@@ -18,6 +18,7 @@ outputs/
 runs/
 **/runs/
 *.csv
+!eda_metadata.csv
 *.parquet
 *.feather
 
