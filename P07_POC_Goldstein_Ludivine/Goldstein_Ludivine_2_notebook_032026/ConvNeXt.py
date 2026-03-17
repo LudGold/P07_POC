@@ -1,33 +1,36 @@
-# ============================================================================
-# ViT (Vision Transformer) via KerasHub - 120 RACES DE CHIENS
-# ============================================================================
-# Modèle : ViT-Base/16 pré-entraîné sur ImageNet (via keras_hub)
-# Architecture Transformer pure pour la vision (Dosovitskiy et al. 2020)
-# Installation : pip install keras_hub tensorflow
-# ============================================================================
+
+# Modèle ConvNeXt - CODE COMPLET POUR 120 RACES DE CHIENS
 
 import os
 from glob import glob
-import pickle
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
-import keras_hub
+from tensorflow.keras.applications import ConvNeXtTiny
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Dense, Dropout, Input, GlobalAveragePooling1D
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 import matplotlib.pyplot as plt
 
 print("="*70)
-print("ViT-Base (KerasHub) - ENTRAÎNEMENT SUR 120 RACES DE CHIENS".center(70))
+print("ConvNeXt - ENTRAÎNEMENT SUR 120 RACES DE CHIENS".center(70))
 print("="*70)
 
 print(f"\nTensorFlow version: {tf.__version__}")
-print(f"KerasHub version  : {keras_hub.__version__}")
-print(f"GPU disponible    : {tf.config.list_physical_devices('GPU')}\n")
+
+# Vérifier que TensorFlow >= 2.11 (requis pour ConvNeXt)
+tf_version = tuple(map(int, tf.__version__.split('.')[:2]))
+if tf_version < (2, 11):
+    print(f"\n ERREUR : ConvNeXt nécessite TensorFlow >= 2.11")
+    print(f"   Version actuelle : {tf.__version__}")
+    print("\nSOLUTION : Mettez à jour TensorFlow :")
+    print("  pip install --upgrade tensorflow")
+    raise SystemExit(1)
+
+print(f"GPU disponible: {tf.config.list_physical_devices('GPU')}\n")
 
 # ============================================================================
 # 1. CHARGEMENT DES DONNÉES
@@ -38,25 +41,25 @@ path_base = "Images"
 def load_all_dogs(base_path):
     """Charge toutes les races de chiens du dataset"""
     data_list = []
-
-    all_folders = [f for f in os.listdir(base_path)
+    
+    all_folders = [f for f in os.listdir(base_path) 
                    if os.path.isdir(os.path.join(base_path, f))]
-
+    
     print(f"Nombre de races trouvées : {len(all_folders)}\n")
-
+    
     total_images = 0
     for folder in all_folders:
         full_path = os.path.join(base_path, folder)
         images = glob(os.path.join(full_path, "*.jpg"))
         breed_name = folder.split('-')[-1]
-
+        
         total_images += len(images)
-
+        
         for img in images:
             data_list.append({"image_path": img, "label_name": breed_name})
-
+    
     print(f"Total images chargées : {total_images}\n")
-
+    
     return pd.DataFrame(data_list)
 
 print("Chargement des images...")
@@ -73,6 +76,7 @@ num_classes = data_full['label'].nunique()
 print(f"Nombre de classes : {num_classes}")
 print(f"Total images : {len(data_full)}")
 
+# Afficher distribution des 10 races les plus représentées
 print("\nDistribution (10 races les plus représentées) :")
 print(data_full['label_name'].value_counts().head(10))
 
@@ -80,17 +84,19 @@ print(data_full['label_name'].value_counts().head(10))
 # 3. SPLIT TRAIN / VAL / TEST (70% / 15% / 15%)
 # ============================================================================
 
+# Train vs (Val+Test)
 train_df, temp_df = train_test_split(
-    data_full,
+    data_full, 
     test_size=0.3,
-    stratify=data_full['label'],
+    stratify=data_full['label'], 
     random_state=42
 )
 
+# Val vs Test
 val_df, test_df = train_test_split(
-    temp_df,
+    temp_df, 
     test_size=0.5,
-    stratify=temp_df['label'],
+    stratify=temp_df['label'], 
     random_state=42
 )
 
@@ -104,34 +110,32 @@ print(f"Total : {len(data_full):5d} images")
 print(f"{'='*70}\n")
 
 # ============================================================================
-# 4. PREPROCESSING ET DATA AUGMENTATION POUR ViT
+# 4. DATA AUGMENTATION POUR ConvNeXt
 # ============================================================================
 
 IMG_SIZE = 224
-BATCH_SIZE = 16
+BATCH_SIZE = 32  # ConvNeXt est efficace, on peut mettre 32
 
-print("Configuration du preprocessing pour ViT...")
+print("Configuration du preprocessing pour ConvNeXt...")
 
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406])
-IMAGENET_STD  = np.array([0.229, 0.224, 0.225])
+# IMPORTANT : Utiliser le preprocessing spécifique de ConvNeXt
+from tensorflow.keras.applications.convnext import preprocess_input
 
-def vit_preprocess_input(img):
-    img = img / 255.0
-    img = (img - IMAGENET_MEAN) / IMAGENET_STD
-    return img
-
+# Data augmentation pour ConvNeXt avec le BON preprocessing
 train_datagen = ImageDataGenerator(
-    preprocessing_function=vit_preprocess_input,
-    rotation_range=20,
-    width_shift_range=0.2,
-    height_shift_range=0.2,
-    shear_range=0.15,
-    zoom_range=0.15,
-    horizontal_flip=True,
+    preprocessing_function=preprocess_input,  # Preprocessing ConvNeXt (ImageNet normalization)
+    rotation_range=20,          # Rotation ±20° (réduit)
+    width_shift_range=0.2,      # Décalage horizontal (réduit)
+    height_shift_range=0.2,     # Décalage vertical (réduit)
+    shear_range=0.15,           # Déformation (réduit)
+    zoom_range=0.15,            # Zoom (réduit)
+    horizontal_flip=True,       # Flip horizontal
     fill_mode='nearest'
 )
 
-val_test_datagen = ImageDataGenerator(preprocessing_function=vit_preprocess_input)
+
+# Pas d'augmentation pour VAL et TEST (juste le preprocessing ConvNeXt)
+val_test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
 
 # ============================================================================
 # 5. GÉNÉRATEURS DE DONNÉES
@@ -179,55 +183,53 @@ print(f"Test  : {len(test_generator):4d} batches")
 print(f"{'='*70}\n")
 
 # ============================================================================
-# 6. CONSTRUCTION DU MODÈLE ViT (via KerasHub)
+# 6. CONSTRUCTION DU MODÈLE ConvNeXt
 # ============================================================================
 
-PRESET_NAME = "vit_base_patch16_224_imagenet"
+print("Construction du modèle ConvNeXt-Tiny...\n")
 
-print(f"Téléchargement du backbone ViT-Base...\n")
-print(f"(Preset : {PRESET_NAME})")
-
-vit_backbone = keras_hub.models.ViTBackbone.from_preset(
-    PRESET_NAME,
-    load_weights=True,
+# Charger la base ConvNeXt-Tiny pré-entraînée sur ImageNet
+base_model = ConvNeXtTiny(
+    weights='imagenet',
+    include_top=False,
+    input_shape=(IMG_SIZE, IMG_SIZE, 3)
 )
 
-vit_backbone.trainable = False
+# Geler les couches de base pour le début
+base_model.trainable = False
 
-inputs = Input(shape=(IMG_SIZE, IMG_SIZE, 3), name='input_images')
-
-features = vit_backbone(inputs)
-cls_token = features[:, 0, :]
-
-x = Dropout(0.5, name='dropout')(cls_token)
+# Ajouter les couches de classification
+x = base_model.output
+x = GlobalAveragePooling2D(name='avg_pool')(x)
+x = Dropout(0.5, name='dropout')(x)
 x = Dense(512, activation='relu', name='fc1')(x)
 x = Dropout(0.3, name='dropout2')(x)
 predictions = Dense(num_classes, activation='softmax', name='predictions')(x)
 
-model_vit = Model(inputs=inputs, outputs=predictions, name='ViT_DogBreeds')
+model_convnext = Model(inputs=base_model.input, outputs=predictions, name='ConvNeXt_DogBreeds')
 
 print(f"{'='*70}")
-print(f"{'ViT-Base/16 (KerasHub) - ARCHITECTURE':^70}")
+print(f"{'ConvNeXt-Tiny - ARCHITECTURE':^70}")
 print(f"{'='*70}")
-print(f"Modèle          : ViT-Base/16 (Dosovitskiy et al. 2020)")
-print(f"Preset          : {PRESET_NAME}")
-print(f"Paramètres      : {model_vit.count_params():,}")
-print(f"Paramètres train: {sum([tf.size(w).numpy() for w in model_vit.trainable_weights]):,}")
+print(f"Modèle          : ConvNeXt-Tiny (Meta AI 2022)")
+print(f"Paramètres      : {model_convnext.count_params():,}")
+print(f"Paramètres train: {sum([tf.size(w).numpy() for w in model_convnext.trainable_weights]):,}")
 print(f"Input size      : {IMG_SIZE}x{IMG_SIZE}")
 print(f"Nombre classes  : {num_classes}")
-print(f"Backbone gelé   : {not vit_backbone.trainable}")
+print(f"Base trainable  : {base_model.trainable}")
 print(f"{'='*70}\n")
 
 # ============================================================================
 # 7. COMPILATION DU MODÈLE
 # ============================================================================
 
+# Utiliser AdamW (meilleur pour les architectures type Transformer)
 optimizer = tf.keras.optimizers.AdamW(
-    learning_rate=3e-4,
-    weight_decay=0.01
+    learning_rate=5e-4,  # LR initial réduit (0.0005)
+    weight_decay=0.01    # Régularisation L2 réduite
 )
 
-model_vit.compile(
+model_convnext.compile(
     optimizer=optimizer,
     loss='categorical_crossentropy',
     metrics=[
@@ -236,13 +238,14 @@ model_vit.compile(
     ]
 )
 
-print("Modèle compilé avec AdamW optimizer\n")
+print("✓ Modèle compilé avec AdamW optimizer\n")
 
 # ============================================================================
-# 8. CALLBACKS
+# 8. CALLBACKS POUR L'ENTRAÎNEMENT
 # ============================================================================
 
 callbacks = [
+    # Early stopping : arrête si pas d'amélioration
     EarlyStopping(
         monitor='val_accuracy',
         patience=15,
@@ -250,6 +253,8 @@ callbacks = [
         verbose=1,
         mode='max'
     ),
+    
+    # Réduction du learning rate
     ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.5,
@@ -257,10 +262,11 @@ callbacks = [
         min_lr=1e-7,
         verbose=1
     ),
+    
+    # Sauvegarde du meilleur modèle
     ModelCheckpoint(
-        'best_vit_120races.weights.h5',
+        'best_convnext_120races.h5',
         save_best_only=True,
-        save_weights_only=True,
         monitor='val_accuracy',
         mode='max',
         verbose=1
@@ -268,49 +274,46 @@ callbacks = [
 ]
 
 # ============================================================================
-# 9. ENTRAÎNEMENT PHASE 1 : Tête seule (backbone gelé)
+# 9. ENTRAÎNEMENT PHASE 1 : Tête seule (base gelée)
 # ============================================================================
 
 print("\n" + "="*70)
-print("PHASE 1 : ENTRAÎNEMENT DE LA TÊTE (backbone gelé)".center(70))
+print("PHASE 1 : ENTRAÎNEMENT DE LA TÊTE (base gelée)".center(70))
 print("="*70 + "\n")
 
-history_phase1 = model_vit.fit(
+history_phase1 = model_convnext.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=20,
+    epochs=20,  # Peu d'epochs pour la phase 1
     callbacks=callbacks,
     verbose=1
 )
 
 # ============================================================================
-# 10. FINE-TUNING : Dégeler les derniers blocs Transformer
+# 10. FINE-TUNING : Dégeler une partie de la base
 # ============================================================================
 
 print("\n" + "="*70)
-print("PHASE 2 : FINE-TUNING (dégel des derniers blocs ViT)".center(70))
+print("PHASE 2 : FINE-TUNING (dégel partiel de la base)".center(70))
 print("="*70 + "\n")
 
-vit_backbone.trainable = True
+# Dégeler les dernières couches de la base
+base_model.trainable = True
 
-num_transformer_layers = len(vit_backbone.transformer_layers)
-layers_to_freeze = num_transformer_layers - 4
-for i, layer in enumerate(vit_backbone.transformer_layers):
-    if i < layers_to_freeze:
-        layer.trainable = False
+# Geler les premières couches, dégeler les dernières
+for layer in base_model.layers[:-30]:  # Geler tout sauf les 30 dernières couches
+    layer.trainable = False
 
-vit_backbone.patch_embedding.trainable = False
+print(f"Couches dégelées : {sum([1 for layer in base_model.layers if layer.trainable])}/{len(base_model.layers)}")
+print(f"Paramètres entraînables : {sum([tf.size(w).numpy() for w in model_convnext.trainable_weights]):,}")
 
-couches_degelees = sum(1 for l in vit_backbone.transformer_layers if l.trainable)
-print(f"Blocs Transformer dégelés : {couches_degelees}/{num_transformer_layers}")
-print(f"Paramètres entraînables   : {sum([tf.size(w).numpy() for w in model_vit.trainable_weights]):,}")
-
+# Recompiler avec un learning rate plus faible pour le fine-tuning
 optimizer_ft = tf.keras.optimizers.AdamW(
-    learning_rate=1e-5,
+    learning_rate=1e-4,  # LR 10x plus faible
     weight_decay=0.05
 )
 
-model_vit.compile(
+model_convnext.compile(
     optimizer=optimizer_ft,
     loss='categorical_crossentropy',
     metrics=[
@@ -319,24 +322,26 @@ model_vit.compile(
     ]
 )
 
-print("Modèle recompilé pour fine-tuning\n")
+print("✓ Modèle recompilé pour fine-tuning\n")
 
-history_phase2 = model_vit.fit(
+# Entraînement phase 2
+history_phase2 = model_convnext.fit(
     train_generator,
     validation_data=val_generator,
-    epochs=50,
+    epochs=50,  # Plus d'epochs pour le fine-tuning
     callbacks=callbacks,
     verbose=1,
-    initial_epoch=len(history_phase1.history['loss'])
+    initial_epoch=len(history_phase1.history['loss'])  # Continue depuis la phase 1
 )
 
+# Combiner les historiques
 history = {
-    'accuracy':         history_phase1.history['accuracy']         + history_phase2.history['accuracy'],
-    'val_accuracy':     history_phase1.history['val_accuracy']     + history_phase2.history['val_accuracy'],
-    'loss':             history_phase1.history['loss']             + history_phase2.history['loss'],
-    'val_loss':         history_phase1.history['val_loss']         + history_phase2.history['val_loss'],
-    'top5_accuracy':    history_phase1.history['top5_accuracy']    + history_phase2.history['top5_accuracy'],
-    'val_top5_accuracy':history_phase1.history['val_top5_accuracy']+ history_phase2.history['val_top5_accuracy']
+    'accuracy': history_phase1.history['accuracy'] + history_phase2.history['accuracy'],
+    'val_accuracy': history_phase1.history['val_accuracy'] + history_phase2.history['val_accuracy'],
+    'loss': history_phase1.history['loss'] + history_phase2.history['loss'],
+    'val_loss': history_phase1.history['val_loss'] + history_phase2.history['val_loss'],
+    'top5_accuracy': history_phase1.history['top5_accuracy'] + history_phase2.history['top5_accuracy'],
+    'val_top5_accuracy': history_phase1.history['val_top5_accuracy'] + history_phase2.history['val_top5_accuracy']
 }
 
 # ============================================================================
@@ -348,20 +353,20 @@ print("ÉVALUATION FINALE".center(70))
 print("="*70 + "\n")
 
 print("Évaluation sur TRAIN...")
-train_loss, train_acc, train_top5 = model_vit.evaluate(train_generator, verbose=0)
+train_loss, train_acc, train_top5 = model_convnext.evaluate(train_generator, verbose=0)
 
 print("Évaluation sur VAL...")
-val_loss, val_acc, val_top5 = model_vit.evaluate(val_generator, verbose=0)
+val_loss, val_acc, val_top5 = model_convnext.evaluate(val_generator, verbose=0)
 
 print("Évaluation sur TEST...")
-test_loss, test_acc, test_top5 = model_vit.evaluate(test_generator, verbose=0)
+test_loss, test_acc, test_top5 = model_convnext.evaluate(test_generator, verbose=0)
 
 # ============================================================================
 # 12. AFFICHAGE DES RÉSULTATS
 # ============================================================================
 
 print(f"\n{'='*70}")
-print(f"{'ViT-Base/16 - RÉSULTATS FINAUX':^70}")
+print(f"{'ConvNeXt-Tiny - RÉSULTATS FINAUX':^70}")
 print(f"{'='*70}")
 print(f"{'Dataset':<12} {'Loss':<12} {'Accuracy':<12} {'Top-5 Acc':<12}")
 print(f"{'-'*70}")
@@ -370,32 +375,33 @@ print(f"{'Val':<12} {val_loss:<12.4f} {val_acc:<12.4f} {val_top5:<12.4f}")
 print(f"{'Test':<12} {test_loss:<12.4f} {test_acc:<12.4f} {test_top5:<12.4f}")
 print(f"{'='*70}")
 
+# Analyse overfitting
 overfit_train_val = (train_acc - val_acc) * 100
-overfit_val_test  = (val_acc - test_acc) * 100
+overfit_val_test = (val_acc - test_acc) * 100
 
 print(f"\nÉcart Train-Val  : {overfit_train_val:+.2f}%")
 print(f"Écart Val-Test   : {overfit_val_test:+.2f}%")
 
 if overfit_train_val > 10:
-    print("Overfitting détecté (Train >> Val)")
+    print("⚠️  Overfitting détecté (Train >> Val)")
 elif overfit_train_val < -5:
-    print("Underfitting possible (Val > Train)")
+    print("ℹ️  Underfitting possible (Val > Train)")
 
 if abs(overfit_val_test) > 5:
-    print("Écart significatif Val-Test")
+    print("⚠️  Écart significatif Val-Test")
 
 # ============================================================================
 # 13. VISUALISATION DES COURBES D'APPRENTISSAGE
 # ============================================================================
 
 fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-fig.suptitle('ViT-Base/16 (KerasHub) - Résultats entraînement', fontsize=16, fontweight='bold')
 
 epochs_range = range(1, len(history['accuracy']) + 1)
 
+# Accuracy
 axes[0, 0].plot(epochs_range, history['accuracy'], label='Train Accuracy', linewidth=2, color='#1f77b4')
 axes[0, 0].plot(epochs_range, history['val_accuracy'], label='Val Accuracy', linewidth=2, color='#ff7f0e')
-axes[0, 0].axhline(y=test_acc, color='r', linestyle='--',
+axes[0, 0].axhline(y=test_acc, color='r', linestyle='--', 
                    label=f'Test Accuracy ({test_acc:.3f})', linewidth=2)
 axes[0, 0].axvline(x=20, color='gray', linestyle=':', alpha=0.5, label='Fine-tuning start')
 axes[0, 0].set_title('Accuracy par epoch', fontsize=14, fontweight='bold')
@@ -404,9 +410,10 @@ axes[0, 0].set_ylabel('Accuracy')
 axes[0, 0].legend()
 axes[0, 0].grid(True, alpha=0.3)
 
+# Loss
 axes[0, 1].plot(epochs_range, history['loss'], label='Train Loss', linewidth=2, color='#1f77b4')
 axes[0, 1].plot(epochs_range, history['val_loss'], label='Val Loss', linewidth=2, color='#ff7f0e')
-axes[0, 1].axhline(y=test_loss, color='r', linestyle='--',
+axes[0, 1].axhline(y=test_loss, color='r', linestyle='--', 
                    label=f'Test Loss ({test_loss:.3f})', linewidth=2)
 axes[0, 1].axvline(x=20, color='gray', linestyle=':', alpha=0.5, label='Fine-tuning start')
 axes[0, 1].set_title('Loss par epoch', fontsize=14, fontweight='bold')
@@ -415,9 +422,10 @@ axes[0, 1].set_ylabel('Loss')
 axes[0, 1].legend()
 axes[0, 1].grid(True, alpha=0.3)
 
+# Top-5 Accuracy
 axes[1, 0].plot(epochs_range, history['top5_accuracy'], label='Train Top-5', linewidth=2, color='#1f77b4')
 axes[1, 0].plot(epochs_range, history['val_top5_accuracy'], label='Val Top-5', linewidth=2, color='#ff7f0e')
-axes[1, 0].axhline(y=test_top5, color='r', linestyle='--',
+axes[1, 0].axhline(y=test_top5, color='r', linestyle='--', 
                    label=f'Test Top-5 ({test_top5:.3f})', linewidth=2)
 axes[1, 0].axvline(x=20, color='gray', linestyle=':', alpha=0.5, label='Fine-tuning start')
 axes[1, 0].set_title('Top-5 Accuracy par epoch', fontsize=14, fontweight='bold')
@@ -426,15 +434,16 @@ axes[1, 0].set_ylabel('Top-5 Accuracy')
 axes[1, 0].legend()
 axes[1, 0].grid(True, alpha=0.3)
 
-categories  = ['Train', 'Val', 'Test']
-accuracies  = [train_acc, val_acc, test_acc]
-top5_accs   = [train_top5, val_top5, test_top5]
+# Comparaison finale
+categories = ['Train', 'Val', 'Test']
+accuracies = [train_acc, val_acc, test_acc]
+top5_accs = [train_top5, val_top5, test_top5]
 
-x     = np.arange(len(categories))
+x = np.arange(len(categories))
 width = 0.35
 
-bars1 = axes[1, 1].bar(x - width/2, accuracies, width, label='Accuracy',      alpha=0.8, color='#2ca02c')
-bars2 = axes[1, 1].bar(x + width/2, top5_accs,  width, label='Top-5 Accuracy', alpha=0.8, color='#d62728')
+bars1 = axes[1, 1].bar(x - width/2, accuracies, width, label='Accuracy', alpha=0.8, color='#2ca02c')
+bars2 = axes[1, 1].bar(x + width/2, top5_accs, width, label='Top-5 Accuracy', alpha=0.8, color='#d62728')
 
 axes[1, 1].set_title('Résultats finaux', fontsize=14, fontweight='bold')
 axes[1, 1].set_ylabel('Score')
@@ -444,36 +453,36 @@ axes[1, 1].legend()
 axes[1, 1].grid(True, alpha=0.3, axis='y')
 axes[1, 1].set_ylim([0, 1])
 
+# Ajouter les valeurs sur les barres
 for bars in [bars1, bars2]:
     for bar in bars:
         height = bar.get_height()
         axes[1, 1].text(bar.get_x() + bar.get_width()/2., height,
-                        f'{height:.3f}',
-                        ha='center', va='bottom', fontsize=9)
+                       f'{height:.3f}',
+                       ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
-plt.savefig('vit_training_results.png', dpi=300, bbox_inches='tight')
-print(f"\nGraphiques sauvegardés : vit_training_results.png")
+plt.savefig('convnext_training_results.png', dpi=300, bbox_inches='tight')
+print(f"\n✓ Graphiques sauvegardés : convnext_training_results.png")
 plt.show()
 
 # ============================================================================
 # 14. SAUVEGARDE DES RÉSULTATS
 # ============================================================================
 
-with open('vit_results.txt', 'w', encoding='utf-8') as f:
+with open('convnext_results.txt', 'w', encoding='utf-8') as f:
     f.write("="*70 + "\n")
-    f.write("ViT-Base/16 (KerasHub) - RÉSULTATS FINAUX\n")
+    f.write("ConvNeXt-Tiny - RÉSULTATS FINAUX\n")
     f.write("="*70 + "\n\n")
-    f.write(f"Modèle            : ViT-Base/16 (Dosovitskiy et al. 2020)\n")
-    f.write(f"Preset KerasHub   : {PRESET_NAME}\n")
+    f.write(f"Modèle          : ConvNeXt-Tiny (Meta AI 2022)\n")
     f.write(f"Nombre de classes : {num_classes}\n")
-    f.write(f"Total images      : {len(data_full)}\n")
-    f.write(f"Train             : {len(train_df)} images\n")
-    f.write(f"Val               : {len(val_df)} images\n")
-    f.write(f"Test              : {len(test_df)} images\n\n")
-    f.write(f"Paramètres du modèle : {model_vit.count_params():,}\n")
+    f.write(f"Total images : {len(data_full)}\n")
+    f.write(f"Train : {len(train_df)} images\n")
+    f.write(f"Val   : {len(val_df)} images\n")
+    f.write(f"Test  : {len(test_df)} images\n\n")
+    f.write(f"Paramètres du modèle : {model_convnext.count_params():,}\n")
     f.write(f"Epochs entraînés : {len(history['loss'])}\n")
-    f.write(f"  - Phase 1 (head only)   : 20 epochs\n")
+    f.write(f"  - Phase 1 (head only) : 20 epochs\n")
     f.write(f"  - Phase 2 (fine-tuning) : {len(history['loss']) - 20} epochs\n\n")
     f.write(f"{'Dataset':<12} {'Loss':<12} {'Accuracy':<12} {'Top-5 Acc':<12}\n")
     f.write(f"{'-'*70}\n")
@@ -482,17 +491,19 @@ with open('vit_results.txt', 'w', encoding='utf-8') as f:
     f.write(f"{'Test':<12} {test_loss:<12.4f} {test_acc:<12.4f} {test_top5:<12.4f}\n")
     f.write("="*70 + "\n")
 
-print("Résultats sauvegardés : vit_results.txt")
+print("✓ Résultats sauvegardés : convnext_results.txt")
 
-with open('label_encoder_vit.pkl', 'wb') as f:
+# Sauvegarder le LabelEncoder pour les prédictions futures
+import pickle
+with open('label_encoder_convnext.pkl', 'wb') as f:
     pickle.dump(le, f)
-print("LabelEncoder sauvegardé : label_encoder_vit.pkl")
+print("✓ LabelEncoder sauvegardé : label_encoder_convnext.pkl")
 
 print("\n" + "="*70)
-print("ENTRAÎNEMENT TERMINÉ !".center(70))
+print("✓ ENTRAÎNEMENT TERMINÉ !".center(70))
 print("="*70)
 print("\nFichiers générés :")
-print("  - best_vit_120races.weights.h5   (meilleur modèle)")
-print("  - vit_training_results.png       (graphiques)")
-print("  - vit_results.txt                (résultats texte)")
-print("  - label_encoder_vit.pkl          (pour prédictions)")
+print("  - best_convnext_120races.h5          (meilleur modèle)")
+print("  - convnext_training_results.png      (graphiques)")
+print("  - convnext_results.txt               (résultats texte)")
+print("  - label_encoder_convnext.pkl         (pour prédictions)")

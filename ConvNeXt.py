@@ -1,6 +1,5 @@
-# ============================================================================
-# ConvNeXt - CODE COMPLET POUR 120 RACES DE CHIENS
-# ============================================================================
+
+# Modèle ConvNeXt - CODE COMPLET POUR 120 RACES DE CHIENS
 
 import os
 from glob import glob
