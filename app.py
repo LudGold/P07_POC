@@ -28,7 +28,7 @@ st.set_page_config(page_title="Le Refuge - Identification Chiens", layout="wide"
 # =====================================================================
 # ARCHITECTURE DINOv3 (PyTorch)
 # Le backbone est reconstruit ici car le modèle pré-entraîné original
-# est privé sur HuggingFace. Les poids sont chargés depuis notre .pt.
+# est privé sur HuggingFace. Les poids sont chargés depuis le .pt.
 # =====================================================================
 
 class _LayerScale(nn.Module):
@@ -104,7 +104,7 @@ class _Embeddings(nn.Module):
 
 class DINOv3Backbone(nn.Module):
     def __init__(self, dim=768, num_layers=12, num_heads=12, mlp_dim=3072,
-                 patch_size=16, num_register_tokens=4):
+                patch_size=16, num_register_tokens=4):
         super().__init__()
         self.embeddings = _Embeddings(dim, patch_size, num_register_tokens)
         self.layer = nn.ModuleList([_Block(dim, num_heads, mlp_dim) for _ in range(num_layers)])
@@ -154,14 +154,14 @@ MODEL_FILES = [
 
 @st.cache_resource
 def download_artifacts():
-    """Telecharge les modeles depuis HuggingFace s'ils n'existent pas localement."""
+    """Télécharge les modèles depuis HuggingFace s'ils n'existent pas localement."""
     for fname in MODEL_FILES:
         if not os.path.exists(fname):
             try:
                 path = hf_hub_download(repo_id=HF_REPO_ID, filename=fname)
                 os.symlink(path, fname)
             except Exception as e:
-                st.warning(f"Impossible de telecharger {fname} : {e}")
+                st.warning(f"Impossible de télécharger {fname} : {e}")
 
 
 def _load_encoder(name):
@@ -183,7 +183,7 @@ def load_all_models():
         x = Dropout(0.5, name='dropout')(x)
         x = Dense(512, activation='relu', name='fc1')(x)
         x = Dropout(0.3, name='dropout2')(x)
-        out = Dense(n_classes, activation='softmax', name='predictions')(x)
+        out = Dense(n_classes, activation='softmax', name='prédictions')(x)
         model = Model(inputs=base.input, outputs=out)
         model.load_weights('best_convnext_120races.h5')
         models['convnext'] = model
@@ -225,7 +225,7 @@ def load_all_models():
 # =====================================================================
 # FONCTIONS UTILITAIRES
 # =====================================================================
-
+# pour accessibilité
 WCAG_COLORS = ["#0056B3", "#D4380D", "#1A7F37", "#6F42C1", "#B8600A"]
 
 MODEL_DISPLAY = {
@@ -237,7 +237,7 @@ MODEL_DISPLAY = {
 
 @st.cache_data
 def load_eda_data():
-    """Charge les metadonnees EDA (local ou CSV)."""
+    """Charge les métadonnées EDA (local ou CSV)."""
     if IMAGES_LOCAL:
         records = []
         for folder in sorted(os.listdir("Images")):
@@ -260,7 +260,7 @@ def load_eda_data():
 
 
 def download_breed_images(folder, filenames, max_imgs=3):
-    """Telecharge quelques images d'une race depuis HuggingFace."""
+    """Télecharge quelques images d'une race depuis HuggingFace."""
     images = []
     for fname in filenames[:max_imgs]:
         try:
@@ -272,7 +272,7 @@ def download_breed_images(folder, filenames, max_imgs=3):
 
 
 def get_breed_images(breed_subset):
-    """Renvoie jusqu'a 5 images PIL pour une race donnee (local ou cloud)."""
+    """Renvoie jusqu'à 5 images PIL pour une race donnée (local ou cloud)."""
     if IMAGES_LOCAL:
         paths = [os.path.join("Images", row['folder'], row['filename'])
                  for _, row in breed_subset.head(3).iterrows()]
@@ -283,7 +283,7 @@ def get_breed_images(breed_subset):
 
 
 def show_transforms(img):
-    """Affiche une image et ses 3 transformations cote a cote."""
+    """Affiche une image et ses 3 transformations côte à côte."""
     img_224 = img.resize((224, 224))
     cols = st.columns(4)
     with cols[0]:
@@ -293,7 +293,7 @@ def show_transforms(img):
     with cols[2]:
         st.image(img_224.filter(ImageFilter.GaussianBlur(3)), caption="Flou gaussien", use_container_width=True)
     with cols[3]:
-        st.image(img_224.filter(ImageFilter.FIND_EDGES), caption="Detection de contours", use_container_width=True)
+        st.image(img_224.filter(ImageFilter.FIND_EDGES), caption="Détection de contours", use_container_width=True)
 
 
 def predict_top5(image, model_name, assets):
@@ -331,7 +331,7 @@ def predict_top5(image, model_name, assets):
 st.title("Le Refuge — Identification de Races de Chiens")
 st.caption("Classification par Deep Learning sur le dataset Stanford Dogs")
 
-with st.spinner("Chargement des modeles..."):
+with st.spinner("Chargement des modèles..."):
     download_artifacts()
     assets = load_all_models()
 
@@ -340,10 +340,10 @@ available_models = list(assets['models'].keys())
 # --- Sidebar ---
 with st.sidebar:
     st.markdown(
-        "**Le Refuge** utilise 3 modeles de Deep Learning "
-        "pour identifier la race d'un chien a partir d'une photo."
+        "**Le Refuge** utilise 3 modèles de Deep Learning "
+        "pour identifier la race d'un chien à partir d'une photo."
     )
-    st.subheader("Modeles")
+    st.subheader("Modèles")
     for key, label in MODEL_DISPLAY.items():
         status = "Charge" if key in assets['models'] else "Indisponible"
         st.markdown(f"- {label} — *{status}*")
@@ -357,9 +357,9 @@ with st.sidebar:
 
 # --- Onglets ---
 tab_eda, tab_predict, tab_perf = st.tabs([
-    "Exploration des donnees",
-    "Identification (prediction)",
-    "Performance des modeles",
+    "Exploration des données",
+    "Identification (prédiction)",
+    "Performance des modèles",
 ])
 
 # ====================== ONGLET 1 : EDA ======================
@@ -372,7 +372,7 @@ with tab_eda:
     eda_df = load_eda_data()
 
     if eda_df.empty:
-        st.warning("Aucune donnee disponible (ni dossier Images/ ni eda_metadata.csv).")
+        st.warning("Aucune donnée disponible (ni dossier Images/ ni eda_metadata.csv).")
     else:
         breed_counts = eda_df['breed'].value_counts().sort_values(ascending=False)
 
@@ -412,7 +412,7 @@ with tab_eda:
         st.subheader("Exemples d'images par race")
         selected_breed = st.selectbox(
             "Choisir une race", sorted(eda_df['breed'].unique()),
-            help="Selectionnez une race pour voir des images du dataset.",
+            help="Sélectionnez une race pour voir des images du dataset.",
         )
         breed_subset = eda_df[eda_df['breed'] == selected_breed]
         st.caption(f"{len(breed_subset)} images pour cette race.")
@@ -427,26 +427,26 @@ with tab_eda:
                     st.image(img, caption=f"#{i+1}", use_container_width=True)
 
             st.markdown("---")
-            st.subheader("Transformations appliquees")
-            st.markdown("Pre-traitements possibles : egalisation, flou gaussien, detection de contours.")
+            st.subheader("Transformations appliquées")
+            st.markdown("Pré-traitements possibles : égalisation, flou gaussien, détection de contours.")
             show_transforms(breed_imgs[0])
 
 # ====================== ONGLET 2 : PREDICTION ======================
 with tab_predict:
     st.header("Identifier la race d'un chien")
-    st.markdown("Soumettez une photo et selectionnez un modele.")
+    st.markdown("Soumettez une photo et sélectionnez un modèle.")
 
     col_upload, col_config = st.columns([2, 1])
 
     with col_config:
         st.subheader("Configuration")
         if not available_models:
-            st.error("Aucun modele n'a pu etre charge.")
+            st.error("Aucun modèle n'a pu être chargé.")
         else:
             selected_model = st.selectbox(
-                "Modele", available_models,
+                "Modèle", available_models,
                 format_func=lambda k: MODEL_DISPLAY.get(k, k),
-                help="Choisissez le modele a utiliser.",
+                help="Choisissez le modèle à utiliser.",
             )
 
     with col_upload:
@@ -475,9 +475,9 @@ with tab_predict:
                 else:
                     st.warning(f"**{name}** — confiance faible ({conf:.1%})")
 
-                st.caption(f"Temps d'inference : {dt*1000:.0f} ms")
+                st.caption(f"Temps d'inférence : {dt*1000:.0f} ms")
 
-                st.markdown("#### Top-5 predictions")
+                st.markdown("#### Top-5 prédictions")
                 for i in range(5):
                     st.progress(float(probs[i]),
                                 text=f"{labels[i].replace('_', ' ').title()} — {probs[i]:.1%}")
@@ -485,26 +485,26 @@ with tab_predict:
 # ====================== ONGLET 3 : PERFORMANCE ======================
 with tab_perf:
     st.header("Comparaison des performances")
-    st.markdown("Resultats sur le jeu de test (3 087 images, 119 races).")
+    st.markdown("Résultats sur le jeu de test (3 087 images, 119 races).")
 
     perf = pd.DataFrame([
-        {"Modele": "ConvNeXt-Tiny", "Accuracy": 0.8853, "Top-5": 0.9922,
-         "Params (M)": 28.3, "Inference": "~45 ms"},
-        {"Modele": "MobileNetV2", "Accuracy": 0.76, "Top-5": 0.96,
-         "Params (M)": 3.5, "Inference": "~25 ms"},
-        {"Modele": "DINOv3 ViT-B/16", "Accuracy": 0.8801, "Top-5": 0.9874,
-         "Params (M)": 86.1, "Inference": "~120 ms"},
+        {"Modèle": "ConvNeXt-Tiny", "Accuracy": 0.8853, "Top-5": 0.9922,
+         "Params (M)": 28.3, "Inférence": "~45 ms"},
+        {"Modèle": "MobileNetV2", "Accuracy": 0.76, "Top-5": 0.96,
+         "Params (M)": 3.5, "Inférence": "~25 ms"},
+        {"Modèle": "DINOv3 ViT-B/16", "Accuracy": 0.8801, "Top-5": 0.9874,
+         "Params (M)": 86.1, "Inférence": "~120 ms"},
     ])
     st.dataframe(perf, hide_index=True, use_container_width=True)
 
     fig3 = go.Figure()
     fig3.add_trace(go.Bar(
-        x=perf['Modele'], y=perf['Accuracy'], name='Top-1',
+        x=perf['Modèle'], y=perf['Accuracy'], name='Top-1',
         marker_color=WCAG_COLORS[0],
         text=[f"{v:.1%}" for v in perf['Accuracy']], textposition='outside',
     ))
     fig3.add_trace(go.Bar(
-        x=perf['Modele'], y=perf['Top-5'], name='Top-5',
+        x=perf['Modèle'], y=perf['Top-5'], name='Top-5',
         marker_color=WCAG_COLORS[2],
         text=[f"{v:.1%}" for v in perf['Top-5']], textposition='outside',
     ))
@@ -512,16 +512,16 @@ with tab_perf:
     st.plotly_chart(fig3, use_container_width=True)
 
     st.info(
-        "**Synthese** : ConvNeXt offre le meilleur compromis precision/vitesse. "
-        "DINOv3 est proche en precision mais plus lourd. "
-        "MobileNetV2 est le plus leger, ideal pour le mobile."
+        "**Synthese** : ConvNeXt offre le meilleur compromis précision/vitesse. "
+        "DINOv3 est proche en précision mais plus lourd. "
+        "MobileNetV2 est le plus léger, idéal pour le mobile."
     )
 
 # --- Footer ---
 st.markdown("---")
 st.markdown(
     "<div style='text-align:center; color:#555; font-size:0.9em'>"
-    "Le Refuge — Projet P07 · LudGold — Accessibilite WCAG 2.1"
+    "Le Refuge — Projet P07 · LudGold — Accessibilité WCAG 2.1"
     "</div>",
     unsafe_allow_html=True,
 )
