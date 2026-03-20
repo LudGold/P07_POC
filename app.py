@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps, ImageFile, UnidentifiedImageError
 import numpy as np
 import pandas as pd
 import pickle
@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from huggingface_hub import hf_hub_download
 
 st.set_page_config(page_title="Le Refuge - Identification Chiens", layout="wide")
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # =====================================================================
 # ARCHITECTURE DINOv3 (PyTorch)
@@ -183,7 +184,7 @@ def load_all_models():
         x = Dropout(0.5, name='dropout')(x)
         x = Dense(512, activation='relu', name='fc1')(x)
         x = Dropout(0.3, name='dropout2')(x)
-        out = Dense(n_classes, activation='softmax', name='prédictions')(x)
+        out = Dense(n_classes, activation='softmax', name='predictions')(x)
         model = Model(inputs=base.input, outputs=out)
         model.load_weights('best_convnext_120races.h5')
         models['convnext'] = model
@@ -246,7 +247,11 @@ def load_eda_data():
                 continue
             breed = folder.split('-', 1)[-1].replace('_', ' ')
             for p in glob(os.path.join(full, "*.jpg")):
-                w, h = Image.open(p).size
+                try:
+                    with Image.open(p) as im:
+                        w, h = im.size
+                except (UnidentifiedImageError, OSError):
+                    continue
                 records.append({
                     "breed": breed, "folder": folder,
                     "filename": os.path.basename(p), "width": w, "height": h,
@@ -265,7 +270,8 @@ def download_breed_images(folder, filenames, max_imgs=3):
     for fname in filenames[:max_imgs]:
         try:
             path = hf_hub_download(repo_id=HF_REPO_ID, filename=f"Images_sample/{folder}/{fname}")
-            images.append(Image.open(path).convert('RGB'))
+            with Image.open(path) as im:
+                images.append(im.convert('RGB'))
         except Exception:
             pass
     return images
@@ -276,7 +282,14 @@ def get_breed_images(breed_subset):
     if IMAGES_LOCAL:
         paths = [os.path.join("Images", row['folder'], row['filename'])
                  for _, row in breed_subset.head(3).iterrows()]
-        return [Image.open(p).convert('RGB') for p in paths]
+        out = []
+        for p in paths:
+            try:
+                with Image.open(p) as im:
+                    out.append(im.convert('RGB'))
+            except (UnidentifiedImageError, OSError):
+                continue
+        return out
     folder = breed_subset['folder'].iloc[0]
     fnames = breed_subset['filename'].tolist()
     return download_breed_images(folder, fnames, max_imgs=3)
@@ -305,7 +318,11 @@ def predict_top5(image, model_name, assets):
         preprocess = convnext_preprocess if model_name == 'convnext' else mobilenet_preprocess
 
         t0 = time.time()
-        preds = assets['models'][model_name].predict(preprocess(img_array), verbose=0)[0]
+        # Evite model.predict() (qui passe par la data-adapter interne) et appelle directement le modèle
+        # en mode inférence.
+        x = preprocess(img_array).astype('float32', copy=False)
+        pred = assets['models'][model_name](x, training=False)
+        preds = pred.numpy()[0]
         dt = time.time() - t0
     else:
         tfm = transforms.Compose([
@@ -456,7 +473,12 @@ with tab_predict:
         )
 
     if uploaded_file and available_models:
-        img = Image.open(uploaded_file).convert('RGB')
+        try:
+            img = Image.open(uploaded_file).convert('RGB')
+        except (UnidentifiedImageError, OSError) as e:
+            st.error(f"Impossible de lire ce fichier comme une image: {e}")
+            img = None
+            uploaded_file = None
         col_img, col_res = st.columns([1, 2])
 
         with col_img:

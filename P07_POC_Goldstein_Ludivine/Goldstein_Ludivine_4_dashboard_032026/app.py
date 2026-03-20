@@ -183,7 +183,7 @@ def load_all_models():
         x = Dropout(0.5, name='dropout')(x)
         x = Dense(512, activation='relu', name='fc1')(x)
         x = Dropout(0.3, name='dropout2')(x)
-        out = Dense(n_classes, activation='softmax', name='prédictions')(x)
+        out = Dense(n_classes, activation='softmax', name='predictions')(x)
         model = Model(inputs=base.input, outputs=out)
         model.load_weights('best_convnext_120races.h5')
         models['convnext'] = model
@@ -305,7 +305,10 @@ def predict_top5(image, model_name, assets):
         preprocess = convnext_preprocess if model_name == 'convnext' else mobilenet_preprocess
 
         t0 = time.time()
-        preds = assets['models'][model_name].predict(preprocess(img_array), verbose=0)[0]
+        # Evite model.predict() (data-adapter interne) : plus robuste en prod
+        x = preprocess(img_array).astype('float32', copy=False)
+        pred = assets['models'][model_name](x, training=False)
+        preds = pred.numpy()[0]
         dt = time.time() - t0
     else:
         tfm = transforms.Compose([

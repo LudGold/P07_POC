@@ -1,9 +1,8 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 streamlit==1.52.0
-tensorflow-cpu==2.20.0
+tensorflow-cpu>=2.16.2
 torch==2.10.0+cpu
 torchvision==0.25.0+cpu
-numpy==2.2.6
 pandas==2.3.0
 plotly==6.5.2
 scikit-learn>=1.7.0
